@@ -4,7 +4,8 @@ import { parseCacheControl } from './util';
 import window from './window';
 
 const CACHE_NAME = 'mapbox-tiles';
-const CACHE_LIMIT = 50;
+const CACHE_LIMIT = 500; // 50MB / (100KB/tile) ~= 500 tiles
+const CACHE_CHECK_THRESHOLD = 50;
 
 export type ResponseOptions = {
     status: number,
@@ -12,9 +13,8 @@ export type ResponseOptions = {
     headers: window.Headers
 };
 
-export function cachePut(request, response, cacheHeaders, requestTime) {
+export function cachePut(request, response, requestTime) {
     if (!window.caches) return;
-    console.log('put');
 
     const options: ResponseOptions = {
         status: response.status,
@@ -29,10 +29,9 @@ export function cachePut(request, response, cacheHeaders, requestTime) {
     }
     if (cacheControl['max-age']) {
         options.headers.set('Expires', new Date(requestTime + cacheControl['max-age'] * 1000).toUTCString())
-        console.log(options.headers.get('Expires'));
     }
 
-    const clonedResponse = new window.Response(response.clone().body, options);
+    const clonedResponse = new window.Response(response.body, options);
 
     window.caches.open(CACHE_NAME)
         .then(cache => {
@@ -70,13 +69,13 @@ function isFresh(response) {
 }
 
 
-const CACHE_CHECK_THRESHOLD = 2;
-let globalEntryCounter = 0;
+let globalEntryCounter = Infinity;
 
 export function cacheEntryPossiblyAdded(dispatcher: Dispatcher) {
     globalEntryCounter++;
     if (globalEntryCounter > CACHE_CHECK_THRESHOLD) {
         dispatcher.send('enforceCacheSizeLimit');
+        globalEntryCounter = 0;
     }
 }
 
